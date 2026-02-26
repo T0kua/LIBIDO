@@ -1,0 +1,118 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+
+body {
+    width: 1440px;
+    height: 1024px;
+    background: linear-gradient(135deg, #1e1e2f, #2a2a45);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Центрирование */
+
+.auth-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Карточка */
+
+.auth-card {
+    width: 420px;
+    padding: 50px;
+    background: #191a2b;
+    border-radius: 25px;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5);
+    text-align: center;
+}
+
+/* Заголовок */
+
+.auth-title {
+    color: #ffffff;
+    font-size: 36px;
+    margin-bottom: 40px;
+    letter-spacing: 1px;
+}
+
+/* Форма */
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Поля */
+
+.auth-input {
+    padding: 15px 20px;
+    font-size: 18px;
+    border-radius: 12px;
+    border: none;
+    outline: none;
+    background: #2f314f;
+    color: #ffffff;
+    transition: 0.3s;
+}
+
+.auth-input::placeholder {
+    color: #888;
+}
+
+.auth-input:focus {
+    background: #3b3d63;
+}
+
+/* Кнопки */
+
+.auth-btn {
+    padding: 15px;
+    font-size: 18px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.primary {
+    background: #4a4cff;
+    color: white;
+}
+
+.primary:hover {
+    background: #6366ff;
+}
+
+.secondary {
+    background: #444;
+    color: white;
+}
+
+.secondary:hover {
+    background: #555;
+}
+
+/* Кнопка выхода */
+
+.logout-btn {
+    margin-top: 30px;
+    background: transparent;
+    border: none;
+    color: #aaa;
+    cursor: pointer;
+    font-size: 16px;
+    transition: 0.3s;
+}
+
+.logout-btn:hover {
+    color: #ff4d4d;
+}

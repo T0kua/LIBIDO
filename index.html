@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Авторизация</title>
+    <link rel="stylesheet" href="auth.css">
+</head>
+<body>
+
+<div class="auth-wrapper">
+
+    <div class="auth-card">
+
+        <h1 class="auth-title">Messenger</h1>
+
+        <div class="auth-form">
+
+            <input 
+                type="text" 
+                id="usernameInput" 
+                placeholder="Имя пользователя"
+                class="auth-input"
+            >
+
+            <input 
+                type="password" 
+                id="passwordInput" 
+                placeholder="Пароль"
+                class="auth-input"
+            >
+
+            <button id="loginBtn" class="auth-btn primary">
+                Войти
+            </button>
+
+            <button id="registerBtn" class="auth-btn secondary">
+                Регистрация
+            </button>
+
+        </div>
+
+        <button id="logoutBtn" class="logout-btn">
+            Выйти
+        </button>
+
+    </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
