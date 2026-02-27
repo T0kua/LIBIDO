@@ -9,27 +9,32 @@
 
 <div class="app">
 
-    <!-- Sidebar -->
     <aside class="sidebar">
-        <div class="chat-item">
-            <img src="#" alt="">
-            <span>Общий чат</span>
+
+        <!-- Поле поиска (теперь отдельно) -->
+        <div class="search-container">
+            <input type="text" id="searchUser" placeholder="Поиск пользователя...">
         </div>
+
+        <!-- Список чатов -->
+        <div class="chat-list" id="chatList"></div>
 
         <div class="settings" id="userDisplay">
-            <!-- Здесь будет логин -->
+            <!-- логин -->
         </div>
+
     </aside>
 
-    <!-- Chat -->
     <main class="chat">
 
         <div class="messages" id="messages"></div>
 
         <div class="input-area">
-            <input type="text" id="messageInput" placeholder="Введите сообщение">
+            <input type="text" id="messageInput" placeholder="Сообщение">
+            <input type="file" id="fileInput" style="display: none;" accept="image/*">
+            <button id="sendImageBtn" title="Отправить изображение">📷</button>
             <button id="sendBtn"></button>
-        </div>
+</div>
 
     </main>
 

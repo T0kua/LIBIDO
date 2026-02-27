@@ -125,3 +125,167 @@ body {
     background: #1e1e2f;
     cursor: pointer;
 }
+.chat-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chat-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-item {
+    padding: 15px;
+    background: #2f314f;
+    color: white;
+    cursor: pointer;
+    border-radius: 10px;
+}
+
+.chat-item:hover {
+    background: #3b3d63;
+}
+
+.own {
+    background: #4a4cff !important;
+    color: white;
+    align-self: flex-end;
+}
+.badge {
+    background: red;
+    color: white;
+    border-radius: 50%;
+    padding: 4px 8px;
+    font-size: 12px;
+    float: right;
+}
+
+.time {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-top: 5px;
+}
+
+.message {
+    background: #e3e3e3;
+    padding: 20px;
+    font-size: 22px;
+    border-radius: 25px;
+    box-shadow: 0 4px 4px rgba(0,0,0,0.25);
+    max-width: 800px;
+    margin-bottom: 10px;
+}
+
+.message.own {
+    background: #4a4cff !important;
+    color: white;
+    align-self: flex-end;
+}
+
+.time {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-top: 5px;
+    text-align: right;
+}
+
+.chat-item {
+    display: flex;
+    align-items: center;
+    background: #2f314f;
+    padding: 15px;
+    gap: 15px;
+    text-decoration: none;
+    color: white;
+    cursor: pointer;
+    border-radius: 10px;
+    margin-bottom: 5px;
+}
+
+.chat-item:hover {
+    background: #3b3d63;
+}
+
+.badge {
+    background: red;
+    color: white;
+    border-radius: 50%;
+    padding: 4px 8px;
+    font-size: 12px;
+    float: right;
+}
+/* Индикатор онлайн/офлайн */
+.online-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+}
+
+.online-indicator.online {
+    background-color: #4caf50;
+    box-shadow: 0 0 5px #4caf50;
+}
+
+.online-indicator.offline {
+    background-color: #9e9e9e;
+}
+
+/* Для элементов чата */
+.chat-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Поле поиска */
+.search-item input {
+    width: 100%;
+    padding: 8px;
+    border: none;
+    border-radius: 5px;
+    background: #3b3d63;
+    color: white;
+    outline: none;
+}
+
+.search-item input::placeholder {
+    color: #aaa;
+}
+.search-container {
+    padding: 10px;
+    background: #191a2b;
+}
+
+.search-container input {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    background: #2f314f;
+    color: white;
+    outline: none;
+}
+
+.search-container input::placeholder {
+    color: #888;
+}
+.input-area button {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: #1e1e2f;
+    cursor: pointer;
+    margin-left: 5px;
+    color: white;
+    font-size: 20px;
+}
+
+.input-area button:hover {
+    background: #2a2a45;
+}
