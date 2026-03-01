@@ -1,5 +1,5 @@
 # libido.py
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import (
     JWTManager, create_access_token,
@@ -11,11 +11,16 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 import redis
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+import time
+import threading
+
 load_dotenv()
+
 # ========================
 # CONFIGURATION
 # ========================
@@ -52,6 +57,38 @@ redis_client = redis.Redis(
     port=int(os.getenv("REDIS_PORT", "6379"))
 )
 
+# ========================
+# FILE UPLOAD SETTINGS
+# ========================
+
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'mp4', 'mov', 'mp3', 'pdf', 'doc', 'docx', 'txt'}
+MAX_CONTENT_LENGTH = 1024 * 1024 * 1024  # 1 GB
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def clean_old_files():
+    """Удаляет файлы старше 20 дней из папки uploads."""
+    now = time.time()
+    cutoff = now - 20 * 24 * 3600  # 20 дней в секундах
+    for filename in os.listdir(UPLOAD_FOLDER):
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        if os.path.isfile(filepath):
+            file_mtime = os.path.getmtime(filepath)
+            if file_mtime < cutoff:
+                try:
+                    os.remove(filepath)
+                    print(f"Удалён старый файл: {filename}")
+                except Exception as e:
+                    print(f"Ошибка удаления {filename}: {e}")
+
+# Запускаем очистку при старте (можно также вызывать по расписанию)
+clean_old_files()
 
 # =========================
 # DATABASE MODELS
@@ -121,8 +158,8 @@ def login():
         if not user or not check_password_hash(user.password, data["password"]):
             return jsonify({"msg": "Bad credentials"}), 401
 
-        token = create_access_token(identity=user.username)
-        # update online in Redis
+        # Токен на 7 дней
+        token = create_access_token(identity=user.username, expires_delta=timedelta(days=7))
         update_online(user.username)
 
         return jsonify(access_token=token, public_key=user.public_key)
@@ -182,7 +219,6 @@ def send_message():
         session.add(msg)
         session.commit()
 
-        # increment unread in Redis
         redis_client.incr(f"unread:{data['receiver']}:{current}")
 
         return jsonify({"msg": "sent"})
@@ -221,8 +257,6 @@ def mark_read(msg_id):
         if msg and msg.receiver == current:
             msg.read = True
             session.commit()
-
-            # reset unread counter for this sender
             redis_client.delete(f"unread:{current}:{msg.sender}")
 
         return jsonify({"status": "ok"})
@@ -234,16 +268,14 @@ def get_chats():
     current = get_jwt_identity()
     chats = {}
 
-    # use Redis unread counters
     for key in redis_client.scan_iter(f"unread:{current}:*"):
         parts = key.decode().split(":")
         sender = parts[-1]
         chats[sender] = int(redis_client.get(key) or 0)
 
-    # Also include recent chat partners
     with Session() as session:
         msgs = session.query(Message).filter(
-            (Message.sender == current) | 
+            (Message.sender == current) |
             (Message.receiver == current)
         ).all()
         for m in msgs:
@@ -253,6 +285,45 @@ def get_chats():
 
     result = [{"user": u, "unread": chats[u]} for u in chats]
     return jsonify(result)
+
+
+# =========================
+# FILE UPLOAD
+# =========================
+
+@app.route("/upload", methods=["POST"])
+@jwt_required()
+def upload_file():
+    current_user = get_jwt_identity()
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    # Проверка размера (дополнительно к глобальному ограничению)
+    if request.content_length > MAX_CONTENT_LENGTH:
+        return jsonify({"error": "File too large (max 1GB)"}), 400
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        unique_name = f"{current_user}_{int(time.time())}_{filename}"
+        save_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
+        file.save(save_path)
+
+        # Удаляем старые файлы после загрузки нового (опционально)
+        # Запускаем в фоне, чтобы не задерживать ответ
+        threading.Thread(target=clean_old_files).start()
+
+        file_url = f"/uploads/{unique_name}"
+        return jsonify({"url": file_url}), 200
+
+    return jsonify({"error": "File type not allowed"}), 400
+
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
 # =========================

@@ -4,12 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
     <title>L1B1D0 · чат</title>
-    <!-- Подключаем Font Awesome для красивых иконок -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
-    <!-- Дополнительные стили для улучшения (можно встроить или добавить в style.css) -->
     <style>
-        /* Дополнения к вашему основному CSS */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background: #1e1e2f;
+        }
+
         .app {
             display: flex;
             height: 100vh;
@@ -27,6 +36,8 @@
             display: flex;
             flex-direction: column;
             border-right: 1px solid #2f314f;
+            height: 100%;
+            overflow-x: hidden; /* убирает горизонтальный скролл, если что-то вылезло */
         }
 
         .search-container {
@@ -84,6 +95,7 @@
         }
 
         .chat-avatar {
+            position: relative;
             width: 48px;
             height: 48px;
             background: #191a2b;
@@ -95,14 +107,33 @@
             color: #aaa;
         }
 
+        .online-indicator {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #9e9e9e;
+            border: 2px solid #191a2b;
+        }
+
+        .online-indicator.online {
+            background: #4caf50;
+            box-shadow: 0 0 5px #4caf50;
+        }
+
         .chat-info {
             flex: 1;
-            min-width: 0;
+            min-width: 0; /* важно для усечения текста */
         }
 
         .chat-name {
             font-weight: 600;
             margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .chat-preview {
@@ -117,6 +148,7 @@
             text-align: right;
             font-size: 12px;
             color: #aaa;
+            white-space: nowrap;
         }
 
         .badge {
@@ -129,12 +161,15 @@
         }
 
         .settings {
-            padding: 20px;
+            padding: 16px 20px;
             border-top: 1px solid #2f314f;
             color: white;
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap; /* позволяет переносить элементы на новую строку при нехватке места */
+            font-size: 14px;
         }
 
         .settings i {
@@ -142,15 +177,45 @@
             color: #4a4cff;
         }
 
+        .settings > div {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0; /* для обрезания текста */
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .settings button {
+            background: #2f314f;
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100px;
+        }
+
+        .settings button:hover {
+            background: #3b3d63;
+        }
+
         .chat {
             flex: 1;
             display: flex;
             flex-direction: column;
-            background: #1e1e2f;
+            height: 100%;
+            min-width: 0; /* для предотвращения переполнения */
         }
 
         .messages {
-            flex: 1;
+            flex: 1 1 auto;
             overflow-y: auto;
             padding: 20px;
             display: flex;
@@ -159,7 +224,7 @@
         }
 
         .message {
-            max-width: 70%;
+            max-width: 80%; /* общее ограничение ширины сообщения */
             padding: 12px 18px;
             background: #2f314f;
             border-radius: 20px;
@@ -181,24 +246,34 @@
             text-align: right;
         }
 
+        .message img {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
         .input-area {
+            flex-shrink: 0;
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 20px;
+            gap: 8px;
+            padding: 16px 20px;
             background: #191a2b;
             border-top: 1px solid #2f314f;
+            width: 100%;
         }
 
         .input-area input[type="text"] {
             flex: 1;
-            padding: 14px 20px;
+            padding: 12px 16px;
             background: #2f314f;
             border: none;
             border-radius: 40px;
             color: white;
             font-size: 15px;
             outline: none;
+            min-width: 0; /* позволяет текстовому полю сжиматься */
         }
 
         .input-area input[type="text"]::placeholder {
@@ -206,8 +281,8 @@
         }
 
         .input-area button {
-            width: 48px;
-            height: 48px;
+            width: 44px;
+            height: 44px;
             border: none;
             border-radius: 50%;
             background: #4a4cff;
@@ -218,6 +293,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
         }
 
         .input-area button:hover {
@@ -235,71 +311,92 @@
             color: white;
         }
 
-        /* Адаптивность */
+        /* Мобильная навигация */
         @media (max-width: 768px) {
             .sidebar {
-                width: 80px;
-                overflow: hidden;
+                width: 100% !important;
+                display: flex !important;
             }
-            .sidebar .chat-info,
-            .sidebar .chat-preview,
-            .sidebar .chat-meta,
-            .sidebar .settings span {
-                display: none;
+            .chat {
+                display: none !important;
+                width: 100% !important;
             }
-            .search-container input {
-                padding: 12px;
-                text-align: center;
+            body.chat-open .sidebar {
+                display: none !important;
             }
-            .chat-item {
-                justify-content: center;
-                padding: 12px;
+            body.chat-open .chat {
+                display: flex !important;
             }
-            .chat-avatar {
-                margin: 0;
+
+            /* Адаптация размеров для мобильных */
+            .message {
+                max-width: 85%;
+                padding: 10px 14px;
+                font-size: 15px;
+            }
+            .input-area {
+                padding: 12px 15px;
+            }
+            .input-area input[type="text"] {
+                padding: 10px 14px;
+                font-size: 15px;
+            }
+            .input-area button {
+                width: 42px;
+                height: 42px;
             }
             .settings {
-                justify-content: center;
+                padding: 12px 16px;
+                font-size: 13px;
             }
             .settings i {
-                font-size: 24px;
+                font-size: 18px;
+            }
+            .settings button {
+                padding: 5px 10px;
+                font-size: 13px;
+                max-width: 80px;
             }
         }
 
+        /* Для очень маленьких экранов */
         @media (max-width: 480px) {
-            .app {
-                border-radius: 0;
-            }
-            .sidebar {
-                width: 60px;
-            }
             .message {
-                max-width: 85%;
+                max-width: 90%;
+                font-size: 14px;
+            }
+            .chat-item {
+                padding: 10px 12px;
+            }
+            .chat-avatar {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
             }
         }
     </style>
 </head>
 <body>
     <div class="app">
-        <!-- Боковая панель -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="search-container">
                 <input type="text" id="searchUser" placeholder="поиск">
             </div>
             <div class="chat-list" id="chatList"></div>
             <div class="settings" id="userDisplay">
-                <i class="fas fa-user-circle"></i>
-                <span>username</span>
+                <div>
+                    <i class="fas fa-user-circle"></i>
+                    <span>username</span>
+                </div>
+                <button id="logoutBtn">Выйти</button>
             </div>
         </aside>
-
-        <!-- Основная область чата -->
-        <main class="chat">
+        <main class="chat" id="chat">
             <div class="messages" id="messages"></div>
             <div class="input-area">
                 <input type="text" id="messageInput" placeholder="Сообщение">
-                <input type="file" id="fileInput" style="display: none;" accept="image/*">
-                <button id="sendImageBtn" title="Отправить изображение"><i class="fas fa-image"></i></button>
+                <input type="file" id="fileInput" style="display: none;" accept="image/*,video/*,audio/*,.pdf,.doc,.txt">
+                <button id="sendImageBtn" title="Отправить файл"><i class="fas fa-paperclip"></i></button>
                 <button id="sendBtn"><i class="fas fa-paper-plane"></i></button>
             </div>
         </main>
