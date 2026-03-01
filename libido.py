@@ -1,297 +1,262 @@
+# libido.py
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import (
     JWTManager, create_access_token,
     jwt_required, get_jwt_identity
 )
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Index, Text
+from sqlalchemy import (
+    create_engine, Column, Integer, String,
+    Boolean, DateTime, Text, Index
+)
 from sqlalchemy.orm import declarative_base, sessionmaker
-from datetime import datetime, timedelta
-import hashlib
+from werkzeug.security import generate_password_hash, check_password_hash
 import redis
 import os
+from datetime import datetime, timedelta
+
+# ========================
+# CONFIGURATION
+# ========================
 
 app = Flask(__name__)
-app.config["JWT_SECRET_KEY"] = "super-secret-key"
 
-# Разрешаем запросы с вашего фронтенд-порта
-CORS(app, origins=["http://localhost:5500", "http://127.0.0.1:5500"], supports_credentials=True)
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "super-secret-key")
 
-jwt = JWTManager(app)
+# Allow only frontend origin (from env or default)
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5500")
+CORS(app, origins=[FRONTEND_URL], supports_credentials=True)
 
-# PostgreSQL connection
+# PostgreSQL database URL (env)
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:password@localhost:5432/libido_db"
+)
+
 engine = create_engine(
-    "postgresql://postgres:darkenral@localhost/messenger_db",
+    DATABASE_URL,
     pool_size=20,
-    max_overflow=0
+    max_overflow=0,
+    pool_pre_ping=True
 )
 
 Base = declarative_base()
 Session = sessionmaker(bind=engine)
 
-# Redis client (для онлайн-статусов и счётчиков)
-redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+jwt = JWTManager(app)
 
-# ======================
-# MODELS
-# ======================
+# Redis for online status and unread counters
+redis_client = redis.Redis(
+    host=os.getenv("REDIS_HOST", "localhost"),
+    port=int(os.getenv("REDIS_PORT", "6379"))
+)
+
+
+# =========================
+# DATABASE MODELS
+# =========================
 
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True)
     username = Column(String, unique=True)
     password = Column(String)
-    public_key = Column(String)
-    last_seen = Column(DateTime)
+    public_key = Column(Text, nullable=True)
+    last_seen = Column(DateTime, default=datetime.utcnow)
+
 
 class Message(Base):
     __tablename__ = "messages"
     id = Column(Integer, primary_key=True)
-    dialog_id = Column(String, index=True)
     sender = Column(String)
     receiver = Column(String)
-    type = Column(String, default='text')          # 'text' или 'image'
-    ciphertext = Column(Text)                      # зашифрованный текст или данные изображения
-    encrypted_key = Column(Text, nullable=True)    # зашифрованный AES-ключ (для изображений)
-    iv = Column(String, nullable=True)              # IV для AES-GCM
-    mime_type = Column(String, nullable=True)       # MIME-тип изображения
-    timestamp = Column(DateTime, index=True)
+    ciphertext = Column(Text)
+    timestamp = Column(DateTime)
     read = Column(Boolean, default=False)
 
-    __table_args__ = (
-        Index('ix_messages_dialog_time', 'dialog_id', 'timestamp'),
-        Index('ix_messages_unread', 'receiver', 'read', postgresql_where=(read == False)),
-    )
 
 Base.metadata.create_all(engine)
 
-# ======================
+# Add indexes for performance
+Index('idx_sender_receiver', Message.sender, Message.receiver)
+
+
+# =========================
 # UTILS
-# ======================
+# =========================
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+def update_online(username: str):
+    redis_client.set(f"online:{username}", "1", ex=15)
 
-def get_dialog_id(user1, user2):
-    return "_".join(sorted([user1, user2]))
 
-# ======================
-# AUTH (без изменений)
-# ======================
+# =========================
+# AUTH ROUTES
+# =========================
 
 @app.route("/register", methods=["POST"])
 def register():
-    session = Session()
-    try:
+    with Session() as session:
         data = request.json
-        if not data or "username" not in data or "password" not in data:
-            return jsonify({"msg": "Username and password required"}), 400
-
         if session.query(User).filter_by(username=data["username"]).first():
             return jsonify({"msg": "User exists"}), 400
 
-        public_key = data.get("public_key", f"temp_key_{data['username']}")
+        hashed = generate_password_hash(data["password"])
         user = User(
             username=data["username"],
-            password=hash_password(data["password"]),
-            public_key=public_key,
-            last_seen=datetime.utcnow()
+            password=hashed,
+            public_key=data.get("public_key")
         )
         session.add(user)
         session.commit()
         return jsonify({"msg": "Registered"})
-    finally:
-        session.close()
+
 
 @app.route("/login", methods=["POST"])
 def login():
-    session = Session()
-    try:
+    with Session() as session:
         data = request.json
         user = session.query(User).filter_by(username=data["username"]).first()
-        if not user or user.password != hash_password(data["password"]):
+
+        if not user or not check_password_hash(user.password, data["password"]):
             return jsonify({"msg": "Bad credentials"}), 401
 
         token = create_access_token(identity=user.username)
-        user.last_seen = datetime.utcnow()
-        session.commit()
+        # update online in Redis
+        update_online(user.username)
 
         return jsonify(access_token=token, public_key=user.public_key)
-    finally:
-        session.close()
 
-# ======================
-# ONLINE STATUS via Redis
-# ======================
+
+# =========================
+# ONLINE STATUS
+# =========================
 
 @app.route("/heartbeat", methods=["POST"])
 @jwt_required()
 def heartbeat():
-    current_user = get_jwt_identity()
-    redis_client.setex(f"online:{current_user}", 15, "1")
+    current = get_jwt_identity()
+    update_online(current)
     return jsonify({"status": "ok"})
+
 
 @app.route("/status/<username>", methods=["GET"])
 @jwt_required()
 def get_status(username):
-    online = redis_client.exists(f"online:{username}")
+    online = redis_client.exists(f"online:{username}") == 1
     return jsonify({"online": bool(online)})
 
-# ======================
+
+# =========================
 # PUBLIC KEY
-# ======================
+# =========================
 
 @app.route("/public_key/<username>", methods=["GET"])
 @jwt_required()
 def get_public_key(username):
-    session = Session()
-    try:
+    with Session() as session:
         user = session.query(User).filter_by(username=username).first()
         if not user:
             return jsonify({"error": "Not found"}), 404
         return jsonify({"public_key": user.public_key})
-    finally:
-        session.close()
 
-# ======================
-# CHATS LIST with Redis unread counters
-# ======================
 
-@app.route("/chats", methods=["GET"])
-@jwt_required()
-def get_chats():
-    session = Session()
-    try:
-        current_user = get_jwt_identity()
-        messages = session.query(Message).filter(
-            (Message.sender == current_user) | (Message.receiver == current_user)
-        ).all()
-        
-        chat_users = set()
-        for msg in messages:
-            if msg.sender != current_user:
-                chat_users.add(msg.sender)
-            if msg.receiver != current_user:
-                chat_users.add(msg.receiver)
-
-        chats = []
-        for user in chat_users:
-            unread = redis_client.hget(f"unread:{current_user}", user) or 0
-            chats.append({"user": user, "unread": int(unread)})
-        
-        return jsonify(chats)
-    finally:
-        session.close()
-
-# ======================
-# SEND MESSAGE (поддерживает текст и изображения)
-# ======================
+# =========================
+# E2E MESSAGING
+# =========================
 
 @app.route("/message", methods=["POST"])
 @jwt_required()
 def send_message():
-    session = Session()
-    try:
-        current_user = get_jwt_identity()
-        data = request.json
+    current = get_jwt_identity()
+    data = request.json
 
-        if not data or "receiver" not in data:
-            return jsonify({"msg": "Missing receiver"}), 400
-
-        dialog_id = get_dialog_id(current_user, data["receiver"])
-
-        msg_data = {
-            "dialog_id": dialog_id,
-            "sender": current_user,
-            "receiver": data["receiver"],
-            "timestamp": datetime.utcnow(),
-            "read": False,
-            "type": data.get("type", "text")
-        }
-
-        if msg_data["type"] == "text":
-            if "ciphertext" not in data:
-                return jsonify({"msg": "Missing ciphertext"}), 400
-            msg_data["ciphertext"] = data["ciphertext"]
-        elif msg_data["type"] == "image":
-            required = ["ciphertext", "encrypted_key", "iv", "mime_type"]
-            if not all(k in data for k in required):
-                return jsonify({"msg": "Missing image fields"}), 400
-            msg_data.update({
-                "ciphertext": data["ciphertext"],
-                "encrypted_key": data["encrypted_key"],
-                "iv": data["iv"],
-                "mime_type": data["mime_type"]
-            })
-        else:
-            return jsonify({"msg": "Invalid message type"}), 400
-
-        msg = Message(**msg_data)
+    with Session() as session:
+        msg = Message(
+            sender=current,
+            receiver=data["receiver"],
+            ciphertext=data["ciphertext"],
+            timestamp=datetime.utcnow(),
+            read=False
+        )
         session.add(msg)
         session.commit()
 
-        # Увеличиваем счётчик непрочитанных в Redis
-        redis_client.hincrby(f"unread:{data['receiver']}", current_user, 1)
+        # increment unread in Redis
+        redis_client.incr(f"unread:{data['receiver']}:{current}")
 
-        return jsonify({"msg": "sent", "id": msg.id})
-    finally:
-        session.close()
+        return jsonify({"msg": "sent"})
 
-# ======================
-# GET MESSAGES
-# ======================
 
 @app.route("/messages/<username>", methods=["GET"])
 @jwt_required()
 def get_messages(username):
-    session = Session()
-    try:
-        current_user = get_jwt_identity()
-        dialog_id = get_dialog_id(current_user, username)
-        
-        messages = session.query(Message).filter(
-            Message.dialog_id == dialog_id
+    current = get_jwt_identity()
+    with Session() as session:
+        msgs = session.query(Message).filter(
+            ((Message.sender == current) & (Message.receiver == username)) |
+            ((Message.sender == username) & (Message.receiver == current))
         ).order_by(Message.timestamp).all()
 
-        return jsonify([
+        result = [
             {
                 "id": m.id,
                 "sender": m.sender,
-                "type": m.type,
                 "ciphertext": m.ciphertext,
-                "encrypted_key": m.encrypted_key,
-                "iv": m.iv,
-                "mime_type": m.mime_type,
                 "time": m.timestamp.strftime("%H:%M"),
                 "read": m.read
             }
-            for m in messages
-        ])
-    finally:
-        session.close()
+            for m in msgs
+        ]
 
-# ======================
-# MARK ALL READ
-# ======================
+        return jsonify(result)
 
-@app.route("/read_all/<sender>", methods=["POST"])
+
+@app.route("/read/<int:msg_id>", methods=["POST"])
 @jwt_required()
-def mark_all_read(sender):
-    session = Session()
-    try:
-        current_user = get_jwt_identity()
-        session.query(Message).filter_by(
-            sender=sender,
-            receiver=current_user,
-            read=False
-        ).update({"read": True})
-        session.commit()
+def mark_read(msg_id):
+    current = get_jwt_identity()
+    with Session() as session:
+        msg = session.query(Message).get(msg_id)
+        if msg and msg.receiver == current:
+            msg.read = True
+            session.commit()
 
-        redis_client.hdel(f"unread:{current_user}", sender)
+            # reset unread counter for this sender
+            redis_client.delete(f"unread:{current}:{msg.sender}")
 
         return jsonify({"status": "ok"})
-    finally:
-        session.close()
+
+
+@app.route("/chats", methods=["GET"])
+@jwt_required()
+def get_chats():
+    current = get_jwt_identity()
+    chats = {}
+
+    # use Redis unread counters
+    for key in redis_client.scan_iter(f"unread:{current}:*"):
+        parts = key.decode().split(":")
+        sender = parts[-1]
+        chats[sender] = int(redis_client.get(key) or 0)
+
+    # Also include recent chat partners
+    with Session() as session:
+        msgs = session.query(Message).filter(
+            (Message.sender == current) | 
+            (Message.receiver == current)
+        ).all()
+        for m in msgs:
+            partner = m.receiver if m.sender == current else m.sender
+            if partner not in chats:
+                chats[partner] = 0
+
+    result = [{"user": u, "unread": chats[u]} for u in chats]
+    return jsonify(result)
+
+
+# =========================
+# RUN
+# =========================
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
