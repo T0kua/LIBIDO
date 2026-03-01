@@ -14,7 +14,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import redis
 import os
 from datetime import datetime, timedelta
-
+from dotenv import load_dotenv
+load_dotenv()
 # ========================
 # CONFIGURATION
 # ========================

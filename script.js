@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:5000";
+const API_BASE = 'http://100.92.183.5:5000';
 
 // ============================
 // ГЕНЕРАЦИЯ КЛЮЧЕЙ
@@ -39,7 +39,8 @@ async function generateKeyPair() {
         
         return publicKeyBase64;
     } catch (error) {
-        console.error("Ошибка генерации ключей:", error);
+        console.error("Ошибка генерации ключей (crypto.subtle недоступен на HTTP):", error);
+        // Возвращаем временный ключ для работы без HTTPS
         return "temp_public_key_" + Date.now();
     }
 }
@@ -57,29 +58,34 @@ async function login() {
         return;
     }
 
-    const response = await fetch(`${API_URL}/login`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ username, password })
-    });
+    try {
+        const response = await fetch(`${API_BASE}/login`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ username, password })
+        });
 
-    const data = await response.json();
+        const data = await response.json();
 
-    if (!response.ok) {
-        alert("Ошибка входа: " + (data.msg || "Неизвестная ошибка"));
-        return;
+        if (!response.ok) {
+            alert("Ошибка входа: " + (data.msg || "Неизвестная ошибка"));
+            return;
+        }
+
+        localStorage.setItem("token", data.access_token);
+        localStorage.setItem("username", username);
+        
+        if (data.public_key) {
+            localStorage.setItem("publicKey", data.public_key);
+        }
+
+        window.location.href = "main.html";
+    } catch (error) {
+        console.error("Ошибка сети:", error);
+        alert("Не удалось подключиться к серверу. Проверьте, запущен ли бэкенд.");
     }
-
-    localStorage.setItem("token", data.access_token);
-    localStorage.setItem("username", username);
-    
-    if (data.public_key) {
-        localStorage.setItem("publicKey", data.public_key);
-    }
-
-    window.location.href = "main.html";
 }
 
 async function register() {
@@ -93,25 +99,30 @@ async function register() {
 
     const publicKey = await generateKeyPair();
 
-    const response = await fetch(`${API_URL}/register`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ 
-            username, 
-            password,
-            public_key: publicKey 
-        })
-    });
+    try {
+        const response = await fetch(`${API_BASE}/register`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ 
+                username, 
+                password,
+                public_key: publicKey 
+            })
+        });
 
-    const data = await response.json();
+        const data = await response.json();
 
-    if (!response.ok) {
-        alert(data.msg || "Ошибка регистрации");
-    } else {
-        alert("Регистрация успешна");
-        await login();
+        if (!response.ok) {
+            alert(data.msg || "Ошибка регистрации");
+        } else {
+            alert("Регистрация успешна");
+            await login();
+        }
+    } catch (error) {
+        console.error("Ошибка сети:", error);
+        alert("Не удалось подключиться к серверу. Проверьте, запущен ли бэкенд.");
     }
 }
 
