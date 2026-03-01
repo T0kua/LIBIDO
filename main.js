@@ -1,5 +1,5 @@
 // main.js
-const API_URL = "http://localhost:5000";
+const API_URL = "http://100.92.183.5:5000";
 
 const token = localStorage.getItem("token");
 const username = localStorage.getItem("username");
